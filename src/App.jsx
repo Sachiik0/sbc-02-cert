@@ -105,7 +105,7 @@ const UpdateValue = async () =>{
   try{
     const provider = getProvider()
     const program = new anchor.Program(idl, programID, provider)
-    const value = new anchor.BN(inputValue)
+    const value = inputValue
 
     let tx2 = await program.rpc.updateValue(value,{
       accounts: {
