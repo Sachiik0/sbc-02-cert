@@ -4,16 +4,17 @@ import * as anchor from '@project-serum/anchor'
 import { Connection, PublicKey, clusterApiUrl } from '@solana/web3.js';
 import idl from './jabol_test.json'
 import { Buffer } from 'buffer';
+import * as utf8 from 'utf8';
 
 
-globalThis.Buffer = Buffer;
+
 const {SystemProgram, Keypair} = anchor.web3
 let myAccount = Keypair.generate()
 const programID = new PublicKey(idl.metadata.address)
 console.log(programID,'programID set correctly')
 const network = clusterApiUrl('devnet')
 const opts = {preflightCommitment: 'processed'}
-
+globalThis.Buffer = Buffer; 
 
 
 function App() {
@@ -28,8 +29,8 @@ function App() {
         if(solana.isPhantom){
           console.log('phantom wallet found')
           const res = await solana.connect({onlyIfTrusted: true})
-          console.log('connected with publicKey', res.publicKey.toString())
-          setWalletAddress(res.publicKey.toString())
+          console.log('connected with publicKey', res.publicKey.toBase58())
+          setWalletAddress(res.publicKey.toBase58())
           await Retrieve()
           if (retrieveValue == null){
             await CreateAccount()
@@ -47,7 +48,7 @@ const connectWallet = async () => {
   if (window.solana){
     const solana = window.solana
     const res = await solana.connect()
-    setWalletAddress(res.publicKey.toString())
+    setWalletAddress(res.publicKey.toBase58())
   } else {
     alert('wallet not found')
   }
@@ -63,39 +64,60 @@ const getProvider = () =>{
   return provider
 } 
 
-const Retrieve = async () =>{
-  try{
-    const provider = getProvider()
-    const program = new anchor.Program(idl, programID, provider)
+const Retrieve = async () => {
+  try {
+    const provider = getProvider();
+    const program = new anchor.Program(idl, programID, provider);
 
-    const account = await program.account.init.fetch(myAccount.publicKey);
-    setRetrieveValue(account.value.toString())
-    console.log('retrieve value is ', retrieveValue)
-  } catch (error){
-  console.log('ERROR IN FETCHING: ', error)
-  setRetrieveValue(null)
+    const [pda, bump] = await anchor.web3.PublicKey.findProgramAddress(
+      [utf8.encode('initial-account'), provider.wallet.publicKey.toBuffer()],
+      program.programId
+    );
+
+    const account = await program.account.init.fetch(pda);
+    setRetrieveValue(account.value.toString());
+    console.log('retrieve value is ', retrieveValue);
+  } catch (error) {
+    console.log('ERROR IN FETCHING: ', error);
+    setRetrieveValue(null);
   }
 }
+
+
 
 const CreateAccount = async () => {
   try {
     const provider = getProvider();
     const program = new anchor.Program(idl, programID, provider);
-    let tx = await program.rpc.initialize({
-      accounts: {
-        initialAccount: myAccount.publicKey,
-        user: provider.wallet.publicKey,
-        systemProgram: SystemProgram.programId,
-      },
-      signers: [myAccount],
-    })
-      console.log('created new myAccount w/ address :', myAccount.publicKey.toString(),)
+
+    const [pda, bump] = await anchor.web3.PublicKey.findProgramAddress(
+      [utf8.encode('initial-account'), provider.wallet.publicKey.toBuffer()],
+      program.programId
+    );
+    console.log('pda', pda.toString());
+    const pdaAccount = await provider.connection.getAccountInfo(pda);
+
+    if (pdaAccount === null) {
+      let tx = await program.rpc.initialize({
+        accounts: {
+          initialAccount: pda, // Using PDA as the account
+          user: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        },
+        signer: [myAccount], // Correctly passing the keypair
+      });
+      console.log('Created new myAccount w/ address:', myAccount.publicKey.toBase58());
+    } else {
+      const account = await program.account.init.fetch(pda);
+      console.log('Retrieved existing account data:', account);
     }
-   catch (error) {
+  } catch (error) {
     console.log('ERROR IN CREATING/INITIALIZING ACCOUNT', error);
     setRetrieveValue(null);
   }
 };
+
+
 
 const onInputChange = (event) =>{
   const {value}= event.target
@@ -106,10 +128,15 @@ const UpdateValue = async () =>{
     const provider = getProvider()
     const program = new anchor.Program(idl, programID, provider)
     const value = inputValue
+    const [pda, bump] = await anchor.web3.PublicKey.findProgramAddress(
+      [utf8.encode('initial-account'), provider.wallet.publicKey.toBuffer()],
+      program.programId
+    );
 
     let tx2 = await program.rpc.updateValue(value,{
       accounts: {
-        storageAccount: myAccount.publicKey,
+        user: provider.wallet.publicKey,
+        initialAccount: pda,
       },
     })
   }catch (error){
