@@ -8,7 +8,7 @@
         {
           "name": "initialAccount",
           "isMut": true,
-          "isSigner": true
+          "isSigner": false
         },
         {
           "name": "user",
@@ -27,7 +27,12 @@
       "name": "updateValue",
       "accounts": [
         {
-          "name": "storageAccount",
+          "name": "user",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "initialAccount",
           "isMut": true,
           "isSigner": false
         }
@@ -49,6 +54,10 @@
           {
             "name": "value",
             "type": "string"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
